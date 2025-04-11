@@ -129,14 +129,14 @@ def setup_logging(name: Optional[str] = None,
         formatter = logging.Formatter(log_format_compact, datefmt="%Y-%m-%d %H:%M:%S")
     else:
         formatter = colorlog.ColoredFormatter(
-    fmt="%(asctime)s [%(log_color)s%(levelname)s %(emoji)s%(reset)s] [%(cyan)s%(name)s%(reset)s] %(green)s%(filename)s%(reset)s::%(purple)s%(funcName)s%(reset)s():%(blue)s%(lineno)d%(reset)s [%(bold_white)suser_id=%(user_id)s%(reset)s] [%(bold_white)ssession_id=%(session_id)s%(reset)s] [%(bold_white)srequest_id=%(request_id)s%(reset)s] [%(bold_white)shostname=%(hostname)s%(reset)s] [%(bold_white)senv=%(env)s%(reset)s] [%(bold_white)spid=%(pid)s%(reset)s] - %(message_log_color)s%(message)s",
+    fmt="%(asctime)s [%(log_color)s%(levelname)s %(emoji)s%(reset)s] [%(cyan)s%(name)s%(reset)s] %(green)s%(filename)s%(reset)s::%(purple)s%(funcName)s%(reset)s():%(blue)s%(lineno)d%(reset)s [%(bold_white)suser_id=%(user_id)s%(reset)s] [%(bold_white)ssession_id=%(session_id)s%(reset)s] [%(bold_white)srequest_id=%(request_id)s%(reset)s] [%(bold_white)shostname=%(hostname)s%(reset)s] [%(bold_white)senv=%(env)s%(reset)s] [%(bold_white)spid=%(pid)s%(reset)s] - %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S",
     log_colors={
         'DEBUG':    'cyan',
         'INFO':     'blue',
         'WARNING':  'yellow',
         'ERROR':    'red',
-        'CRITICAL': 'bold_red',
+        'CRITICAL': 'bold_red'
     },
     secondary_log_colors={
         'message': {
@@ -144,29 +144,15 @@ def setup_logging(name: Optional[str] = None,
             'INFO':     'green',
             'WARNING':  'bold_yellow',
             'ERROR':    'bold_red',
-            'CRITICAL': 'red,bg_white',
+            'CRITICAL': 'red,bg_white'
         }
     },
     style='%',
     reset=True,
-    log_attrs=['levelname', 'name', 'filename', 'funcName', 'lineno', 'message', 'emoji']
-        'DEBUG':    'cyan',
-        'INFO':     'blue',
-        'WARNING':  'yellow',
-        'ERROR':    'red',
-        'CRITICAL': 'bold_red',
-    },
-    secondary_log_colors={
-        'message': {
-            'DEBUG':    'white',
-            'INFO':     'green',
-            'WARNING':  'bold_yellow',
-            'ERROR':    'bold_red',
-            'CRITICAL': 'red,bg_white',
-        }
-    },
-    style='%'
+    # log_attrs is not a valid argument for ColoredFormatter and has been removed
 )
+
+        
 
     if to_console:
         console_handler = logging.StreamHandler(sys.stdout)
@@ -239,7 +225,7 @@ def tqdm_logging(iterable, logger: logging.Logger, level: str = "info"):
 
 # Example usage
 if __name__ == "__main__":
-    log = setup_logging(name=__name__, to_console=True, to_file=True, file_path="logs/example.log", level="DEBUG", mode="verbose", use_json=False, rotation="time", context={"user_id": "test_user"})
+    log = setup_logging(name=__name__, to_console=True, to_file=True, file_path="logs/example.log", level="DEBUG", mode="verbose", use_json=True, rotation="time", context={"user_id": "test_user"})
     log = ContextualLoggerAdapter(log)
 
     # Global context set for all following log entries

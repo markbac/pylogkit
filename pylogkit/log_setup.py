@@ -95,6 +95,7 @@ class ContextualLoggerAdapter(logging.LoggerAdapter):
         return self
 
 def setup_logging(name: Optional[str] = None,
+                  overwrite: bool = False,
                   to_console: bool = True,
                   to_file: bool = False,
                   file_path: Optional[str] = "app.log",
@@ -123,8 +124,30 @@ def setup_logging(name: Optional[str] = None,
     log_format_verbose = ("%(asctime)s [%(levelname)s] [%(name)s] [%(filename)s:%(lineno)d %(funcName)s()] [user_id=%(user_id)s] [session_id=%(session_id)s] [request_id=%(request_id)s] [hostname=%(hostname)s] [env=%(env)s] [pid=%(pid)s] - %(message)s")
     log_format_compact = ("[%(levelname)s] %(message)s")
 
-    if use_json and jsonlogger:
-        formatter = jsonlogger.JsonFormatter()
+    if jsonlogger:
+        json_formatter = jsonlogger.JsonFormatter(json_ensure_ascii=False)
+        formatter = colorlog.ColoredFormatter(
+            fmt="%(asctime)s [%(log_color)s%(levelname)s %(emoji)s%(reset)s] [%(cyan)s%(name)s%(reset)s] %(green)s%(filename)s%(reset)s::%(purple)s%(funcName)s%(reset)s():%(blue)s%(lineno)d%(reset)s [%(bold_white)suser_id=%(user_id)s%(reset)s] [%(bold_white)ssession_id=%(session_id)s%(reset)s] [%(bold_white)srequest_id=%(request_id)s%(reset)s] [%(bold_white)shostname=%(hostname)s%(reset)s] [%(bold_white)senv=%(env)s%(reset)s] [%(bold_white)spid=%(pid)s%(reset)s] - %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+            log_colors={
+                'DEBUG':    'cyan',
+                'INFO':     'blue',
+                'WARNING':  'yellow',
+                'ERROR':    'red',
+                'CRITICAL': 'bold_red'
+            },
+            secondary_log_colors={
+                'message': {
+                    'DEBUG':    'white',
+                    'INFO':     'green',
+                    'WARNING':  'bold_yellow',
+                    'ERROR':    'bold_red',
+                    'CRITICAL': 'red,bg_white'
+                }
+            },
+            style='%',
+            reset=True
+        )
     elif mode == "compact":
         formatter = logging.Formatter(log_format_compact, datefmt="%Y-%m-%d %H:%M:%S")
     else:
@@ -163,22 +186,26 @@ def setup_logging(name: Optional[str] = None,
     if to_file and file_path:
         os.makedirs(os.path.dirname(file_path), exist_ok=True) if os.path.dirname(file_path) else None
         if rotation == "time":
-            file_handler = TimedRotatingFileHandler(file_path, when="midnight", backupCount=backup_count)
+            mode = 'w' if overwrite else 'a'
+            file_handler = TimedRotatingFileHandler(file_path, when="midnight", backupCount=backup_count, encoding='utf-8')
         else:
-            file_handler = RotatingFileHandler(file_path, maxBytes=max_bytes, backupCount=backup_count)
+            mode = 'w' if overwrite else 'a'
+            file_handler = RotatingFileHandler(file_path, maxBytes=max_bytes, backupCount=backup_count, encoding='utf-8')
         file_handler.setLevel((file_level or level).upper())
         file_formatter = logging.Formatter(log_format_verbose, datefmt="%Y-%m-%d %H:%M:%S")
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
 
-        if to_json_file and json_file_path and jsonlogger:
-            if os.path.dirname(json_file_path):
-                os.makedirs(os.path.dirname(json_file_path), exist_ok=True)
-            json_handler = RotatingFileHandler(json_file_path, maxBytes=max_bytes, backupCount=backup_count)
-            json_handler.setLevel((json_level or level).upper())
-            json_formatter = jsonlogger.JsonFormatter()
-            json_handler.setFormatter(json_formatter)
-            logger.addHandler(json_handler)
+    if to_json_file and json_file_path and jsonlogger:
+        if os.path.dirname(json_file_path):
+            os.makedirs(os.path.dirname(json_file_path), exist_ok=True)
+        mode = 'w' if overwrite else 'a'
+        json_handler = RotatingFileHandler(json_file_path, maxBytes=max_bytes, backupCount=backup_count, encoding='utf-8')
+        json_handler.setLevel((json_level or level).upper())
+        json_handler.setFormatter(json_formatter)
+        logger.addHandler(json_handler)
+
+
 
     if to_syslog:
         syslog_handler = SysLogHandler(address=("localhost", 514))
@@ -225,7 +252,19 @@ def tqdm_logging(iterable, logger: logging.Logger, level: str = "info"):
 
 # Example usage
 if __name__ == "__main__":
-    log = setup_logging(name=__name__, to_console=True, to_file=True, file_path="logs/example.log", level="DEBUG", mode="verbose", use_json=True, rotation="time", context={"user_id": "test_user"})
+    log = setup_logging(
+        name=__name__,
+        to_console=True,
+        to_file=True,
+        file_path="logs/example.log",
+        to_json_file=True,
+        json_file_path="logs/example.json",
+        overwrite=True,
+        level="DEBUG",
+        mode="verbose",
+        rotation="time",
+        context={"user_id": "test_user"}
+    )
     log = ContextualLoggerAdapter(log)
 
     # Global context set for all following log entries

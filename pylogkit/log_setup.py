@@ -52,6 +52,9 @@ def clear_log_context():
 def get_log_context():
     import socket
     context = getattr(_log_context, 'data', {}).copy()
+    context.setdefault("user_id", "-")
+    context.setdefault("session_id", "-")
+    context.setdefault("request_id", "-")
     context.setdefault("hostname", socket.gethostname())
     context.setdefault("env", os.getenv("APP_ENV", "dev"))
     context.setdefault("pid", os.getpid())

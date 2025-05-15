@@ -26,6 +26,14 @@ from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler, SysL
 from typing import Optional
 from functools import wraps
 
+# 🎨 Colour config
+COLOUR_TIMESTAMP = "bold_purple"
+COLOUR_CONTEXT_LABEL = "yellow"
+COLOUR_MODULE_NAME = "cyan"
+COLOUR_FILENAME = "green"
+COLOUR_FUNCTION = "purple"
+COLOUR_LINENO = "blue"
+
 try:
     import colorlog
 except ImportError:
@@ -59,6 +67,38 @@ def get_log_context():
     context.setdefault("env", os.getenv("APP_ENV", "dev"))
     context.setdefault("pid", os.getpid())
     return context
+
+class CompactContextFormatter(colorlog.ColoredFormatter):
+    def format(self, record):
+        # Remove any context field that is empty, "-", or None
+        for attr in list(vars(record)):
+            if isinstance(getattr(record, attr), str) and getattr(record, attr).strip() in {"", "-"}:
+                setattr(record, attr, "")
+
+        return super().format(record)
+
+class SmartFieldFormatter(colorlog.ColoredFormatter):
+    def format(self, record):
+        for key in ["user_id", "session_id", "request_id", "hostname", "env", "pid"]:
+            if not hasattr(record, key):
+                setattr(record, key, "")
+
+        field_map = {
+            "user_id": record.user_id,
+            "session_id": record.session_id,
+            "request_id": record.request_id,
+            "hostname": record.hostname,
+            "env": record.env,
+            "pid": record.pid
+        }
+
+        dynamic_fields = []
+        for k, v in field_map.items():
+            if v and v != "-":
+                dynamic_fields.append(f"[{k}={v}]")
+
+        record.context = " ".join(dynamic_fields)
+        return super().format(record)
 
 class ContextFilter(logging.Filter):
     def filter(self, record):
@@ -124,13 +164,24 @@ def setup_logging(name: Optional[str] = None,
     if context:
         set_log_context(**context)
 
-    log_format_verbose = ("%(asctime)s [%(levelname)s] [%(name)s] [%(filename)s:%(lineno)d %(funcName)s()] [user_id=%(user_id)s] [session_id=%(session_id)s] [request_id=%(request_id)s] [hostname=%(hostname)s] [env=%(env)s] [pid=%(pid)s] - %(message)s")
+    log_format_verbose = (
+        "%(asctime)s [%(levelname)s] [%(name)s] [%(filename)s:%(lineno)d %(funcName)s()] %(context)s - %(message)s"
+    )
+
     log_format_compact = ("[%(levelname)s] %(message)s")
 
     if jsonlogger:
         json_formatter = jsonlogger.JsonFormatter(json_ensure_ascii=False)
-        formatter = colorlog.ColoredFormatter(
-            fmt="%(asctime)s [%(log_color)s%(levelname)s %(emoji)s%(reset)s] [%(cyan)s%(name)s%(reset)s] %(green)s%(filename)s%(reset)s::%(purple)s%(funcName)s%(reset)s():%(blue)s%(lineno)d%(reset)s [%(bold_white)suser_id=%(user_id)s%(reset)s] [%(bold_white)ssession_id=%(session_id)s%(reset)s] [%(bold_white)srequest_id=%(request_id)s%(reset)s] [%(bold_white)shostname=%(hostname)s%(reset)s] [%(bold_white)senv=%(env)s%(reset)s] [%(bold_white)spid=%(pid)s%(reset)s] - %(message)s",
+        formatter = SmartFieldFormatter(
+            fmt=f"%({COLOUR_TIMESTAMP})s%(asctime)s%(reset)s "
+                "[%(log_color)s%(levelname)s %(emoji)s%(reset)s] "
+                f"[%({COLOUR_MODULE_NAME})s%(name)s%(reset)s] "
+                f"%({COLOUR_FILENAME})s%(filename)s%(reset)s::"
+                f"%({COLOUR_FUNCTION})s%(funcName)s%(reset)s():"
+                f"%({COLOUR_LINENO})s%(lineno)d%(reset)s "
+                f"%({COLOUR_CONTEXT_LABEL})s%(context)s%(reset)s - "
+                "%(log_color)s%(message)s%(reset)s",
+
             datefmt="%Y-%m-%d %H:%M:%S",
             log_colors={
                 'DEBUG':    'cyan',
@@ -141,44 +192,51 @@ def setup_logging(name: Optional[str] = None,
             },
             secondary_log_colors={
                 'message': {
-                    'DEBUG':    'white',
-                    'INFO':     'green',
-                    'WARNING':  'bold_yellow',
-                    'ERROR':    'bold_red',
-                    'CRITICAL': 'red,bg_white'
+                    'DEBUG':    'cyan',
+                    'INFO':     'blue',
+                    'WARNING':  'yellow',
+                    'ERROR':    'red',
+                    'CRITICAL': 'bold_red'
                 }
             },
             style='%',
             reset=True
         )
+
+
     elif mode == "compact":
         formatter = logging.Formatter(log_format_compact, datefmt="%Y-%m-%d %H:%M:%S")
     else:
-        formatter = colorlog.ColoredFormatter(
-    fmt="%(asctime)s [%(log_color)s%(levelname)s %(emoji)s%(reset)s] [%(cyan)s%(name)s%(reset)s] %(green)s%(filename)s%(reset)s::%(purple)s%(funcName)s%(reset)s():%(blue)s%(lineno)d%(reset)s [%(bold_white)suser_id=%(user_id)s%(reset)s] [%(bold_white)ssession_id=%(session_id)s%(reset)s] [%(bold_white)srequest_id=%(request_id)s%(reset)s] [%(bold_white)shostname=%(hostname)s%(reset)s] [%(bold_white)senv=%(env)s%(reset)s] [%(bold_white)spid=%(pid)s%(reset)s] - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    log_colors={
-        'DEBUG':    'cyan',
-        'INFO':     'blue',
-        'WARNING':  'yellow',
-        'ERROR':    'red',
-        'CRITICAL': 'bold_red'
-    },
-    secondary_log_colors={
-        'message': {
-            'DEBUG':    'white',
-            'INFO':     'green',
-            'WARNING':  'bold_yellow',
-            'ERROR':    'bold_red',
-            'CRITICAL': 'red,bg_white'
-        }
-    },
-    style='%',
-    reset=True,
-    # log_attrs is not a valid argument for ColoredFormatter and has been removed
-)
+        formatter = SmartFieldFormatter(
+            fmt=f"%({COLOUR_TIMESTAMP})s%(asctime)s%(reset)s "
+                "[%(log_color)s%(levelname)s %(emoji)s%(reset)s] "
+                f"[%({COLOUR_MODULE_NAME})s%(name)s%(reset)s] "
+                f"%({COLOUR_FILENAME})s%(filename)s%(reset)s::"
+                f"%({COLOUR_FUNCTION})s%(funcName)s%(reset)s():"
+                f"%({COLOUR_LINENO})s%(lineno)d%(reset)s "
+                f"%({COLOUR_CONTEXT_LABEL})s%(context)s%(reset)s - "
+                "%(log_color)s%(message)s%(reset)s",
 
-        
+            datefmt="%Y-%m-%d %H:%M:%S",
+            log_colors={
+                'DEBUG':    'cyan',
+                'INFO':     'blue',
+                'WARNING':  'yellow',
+                'ERROR':    'red',
+                'CRITICAL': 'bold_red'
+            },
+            secondary_log_colors={
+                'message': {
+                    'DEBUG':    'cyan',
+                    'INFO':     'blue',
+                    'WARNING':  'yellow',
+                    'ERROR':    'red',
+                    'CRITICAL': 'bold_red'
+                }
+            },
+            style='%',
+            reset=True
+        )
 
     if to_console:
         console_handler = logging.StreamHandler(sys.stdout)
@@ -195,7 +253,7 @@ def setup_logging(name: Optional[str] = None,
             mode = 'w' if overwrite else 'a'
             file_handler = RotatingFileHandler(file_path, maxBytes=max_bytes, backupCount=backup_count, encoding='utf-8')
         file_handler.setLevel((file_level or level).upper())
-        file_formatter = logging.Formatter(log_format_verbose, datefmt="%Y-%m-%d %H:%M:%S")
+        file_formatter = SmartFieldFormatter(log_format_verbose, datefmt="%Y-%m-%d %H:%M:%S")
         file_handler.setFormatter(file_formatter)
         logger.addHandler(file_handler)
 
